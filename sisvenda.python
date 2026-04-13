@@ -1,1 +1,63 @@
+import sqlite3
+import hashlib
 
+class SistemaVendas:
+    def __init__(self, db_name="sistema_vendas.db"):
+        self.conn = sqlite3.connect(db_name)
+        self.cursor = self.conn.cursor()
+        self._criar_tabelas()
+        self._init_admin()
+
+    def _criar_tabelas(self):
+        self.cursor.execute('''CREATE TABLE IF NOT EXISTS usuarios 
+                          (id INTEGER PRIMARY KEY, usuario TEXT UNIQUE, senha TEXT, tipo TEXT)''')
+        self.cursor.execute('''CREATE TABLE IF NOT EXISTS vendas 
+                          (id INTEGER PRIMARY KEY, cliente TEXT, produto TEXT, valor REAL)''')
+        self.conn.commit()
+
+    def _init_admin(self):
+        # Cria o dono se não existir
+        senha_hash = hashlib.sha256('admin'.encode()).hexdigest()
+        try:
+            self.cursor.execute("INSERT INTO usuarios (usuario, senha, tipo) VALUES (?, ?, ?)", 
+                               ('admin', senha_hash, 'dono'))
+            self.conn.commit()
+        except sqlite3.IntegrityError:
+            pass
+
+    def autenticar(self, usuario, senha):
+        senha_hash = hashlib.sha256(senha.encode()).hexdigest()
+        self.cursor.execute("SELECT tipo FROM usuarios WHERE usuario=? AND senha=?", (usuario, senha_hash))
+        return self.cursor.fetchone()
+
+    def registrar_venda(self, cliente, produto, valor):
+        self.cursor.execute("INSERT INTO vendas (cliente, produto, valor) VALUES (?, ?, ?)", 
+                           (cliente, produto, valor))
+        self.conn.commit()
+
+    def fechar(self):
+        self.conn.close()
+
+# --- Fluxo Principal ---
+if __name__ == "__main__":
+    sistema = SistemaVendas()
+    
+    print("--- Login ---")
+    user_input = input("Usuário: ")
+    pass_input = input("Senha: ")
+    
+    dados = sistema.autenticar(user_input, pass_input)
+    
+    if dados:
+        tipo = dados[0]
+        print(f"\nLogin bem-sucedido! Acesso como: {tipo.upper()}")
+        
+        if tipo == 'dono':
+            prod = input("Produto vendido: ")
+            val = float(input("Valor: "))
+            sistema.registrar_venda(user_input, prod, val)
+            print("Venda registrada com sucesso.")
+    else:
+        print("Usuário ou senha incorretos.")
+        
+    sistema.fechar()
